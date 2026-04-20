@@ -159,7 +159,7 @@ export default function AdminDisputeDetailPage() {
       {dispute.status === "RESOLVED" && (
         <Card className="border-green-500/30 bg-green-500/5">
           <p className="text-green-400 font-semibold">✅ Khiếu nại đã được phân xử</p>
-          <p className="text-slate-400 text-sm mt-1">{dispute.resolutionInfo}</p>
+          <p className="text-slate-400 text-sm mt-1">{dispute.adminDecision}</p>
         </Card>
       )}
     </div>
