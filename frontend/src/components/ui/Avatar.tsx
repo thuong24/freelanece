@@ -2,13 +2,13 @@ import { getInitials } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
 interface AvatarProps {
-  name: string;
+  name?: string;
   src?: string | null;
   size?: "sm" | "md" | "lg" | "xl" | "2xl";
   className?: string;
 }
 
-export const Avatar = ({ name, src, size = "md", className }: AvatarProps) => {
+export const Avatar = ({ name = "U", src, size = "md", className }: AvatarProps) => {
   const sizes = { 
     sm: "w-8 h-8 text-xs", 
     md: "w-10 h-10 text-sm", 
