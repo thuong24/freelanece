@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 
-interface TimelineFormData { title: string; description: string; }
+interface TimelineFormData { action: string; description: string; }
 
 export const TimelineList = ({ contractId, canAdd }: { contractId: string; canAdd: boolean }) => {
   const [showForm, setShowForm] = useState(false);
@@ -33,7 +33,7 @@ export const TimelineList = ({ contractId, canAdd }: { contractId: string; canAd
           {showForm && (
             <Card className="mt-3">
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                <Input label="Tiêu đề cập nhật" placeholder="VD: Hoàn thành module authentication" {...register("title", { required: true })} />
+                <Input label="Tiêu đề cập nhật" placeholder="VD: Hoàn thành module authentication" {...register("action", { required: true })} />
                 <Textarea label="Mô tả chi tiết" placeholder="Mô tả những gì đã làm..." rows={3} {...register("description", { required: true })} />
                 <Button type="submit" size="sm" loading={isPending}>Gửi cập nhật</Button>
               </form>
@@ -53,7 +53,7 @@ export const TimelineList = ({ contractId, canAdd }: { contractId: string; canAd
               <div key={tl.id} className="relative">
                 <div className="absolute -left-4 top-1.5 w-2.5 h-2.5 rounded-full bg-indigo-500 border-2 border-slate-950" />
                 <Card padding="sm">
-                  <p className="text-slate-200 font-medium text-sm">{tl.title}</p>
+                  <p className="text-slate-200 font-medium text-sm">{tl.action}</p>
                   <p className="text-slate-400 text-xs mt-0.5">{tl.description}</p>
                   <p className="text-slate-600 text-xs mt-1">{formatDateTime(tl.createdAt)}</p>
                 </Card>
