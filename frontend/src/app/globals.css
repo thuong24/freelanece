@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+:root {
+  --color-brand: #6366f1;
+  --color-brand-hover: #4f46e5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+@keyframes bell-shake {
+  0%, 100% { transform: rotate(0); }
+  5% { transform: rotate(25deg); }
+  10% { transform: rotate(-25deg); }
+  15% { transform: rotate(20deg); }
+  20% { transform: rotate(-20deg); }
+  25% { transform: rotate(15deg); }
+  30% { transform: rotate(-15deg); }
+  35% { transform: rotate(10deg); }
+  40% { transform: rotate(-10deg); }
+  45% { transform: rotate(5deg); }
+  50% { transform: rotate(-5deg); }
+  55% { transform: rotate(0); }
+}
+
+.animate-bell-shake {
+  animation: bell-shake 1.5s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(0.95); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
