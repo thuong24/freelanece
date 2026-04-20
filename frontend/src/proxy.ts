@@ -4,7 +4,7 @@ const PROTECTED_PATHS = ["/dashboard", "/jobs/create", "/contracts", "/wallet", 
 const ADMIN_PATHS = ["/admin"];
 const GUEST_PATHS = ["/login", "/register"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Cookie httpOnly do backend set khi login thành công
