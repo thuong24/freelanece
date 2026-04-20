@@ -7,9 +7,9 @@ const GUEST_PATHS = ["/login", "/register"];
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Cookie httpOnly do backend set khi login thành công
-  const hasRefreshToken = request.cookies.has("refreshToken");
+  // Kiểm tra trạng thái đăng nhập dựa trên userRole (được set ở client sau khi login thành công)
   const userRole = request.cookies.get("userRole")?.value;
+  const isLoggedIn = !!userRole;
 
   // Guest paths: vẫn cho phép truy cập để người dùng có thể đăng nhập lại nếu cookie bị lỗi (state desync)
   if (GUEST_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
@@ -18,7 +18,7 @@ export function proxy(request: NextRequest) {
 
   // Protected paths: nếu CHƯA đăng nhập thì redirect về login
   if (PROTECTED_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
-    if (!hasRefreshToken) {
+    if (!isLoggedIn) {
       const url = new URL("/login", request.url);
       url.searchParams.set("redirect", pathname);
       return NextResponse.redirect(url);
@@ -27,7 +27,7 @@ export function proxy(request: NextRequest) {
 
   // Admin paths
   if (ADMIN_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
-    if (!hasRefreshToken) {
+    if (!isLoggedIn) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
     if (userRole !== "ADMIN") {
