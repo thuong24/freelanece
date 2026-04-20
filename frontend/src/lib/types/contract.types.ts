@@ -35,6 +35,8 @@ export interface Contract {
   client?: { id: string; name: string; avatarUrl: string | null };
   freelancer?: { id: string; name: string; avatarUrl: string | null };
   job?: { id: string; title: string };
+  extensionRequest?: ExtensionRequest | null;
+  mutualCancel?: MutualCancelRequest | null;
 }
 
 export interface ExtensionRequest {
