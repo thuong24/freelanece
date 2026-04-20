@@ -1,0 +1,663 @@
+// =============================================================
+// FREELANCE ESCROW PLATFORM — PRISMA SCHEMA
+// Database: MySQL | ORM: Prisma
+// Ghi chú: Một tài khoản USER vừa có thể đăng job (vai client)
+//          vừa có thể bid nhận job (vai freelancer).
+//          Chỉ có 2 role hệ thống: USER và ADMIN.
+// =============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================
+// ENUMS
+// =============================================================
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+  SUSPENDED
+}
+
+enum JobStatus {
+  OPEN       // Đang mở, nhận bid
+  ASSIGNED   // Đã chốt deal, ẩn khỏi board
+  CLOSED     // Đóng thủ công bởi chủ bài
+}
+
+enum BidStatus {
+  PENDING    // Chờ client xem xét
+  ACCEPTED   // Được chọn → tạo contract
+  REJECTED   // Bị từ chối bởi client
+  WITHDRAWN  // Freelancer tự rút
+}
+
+enum ContractStatus {
+  PENDING               // Vừa khởi tạo, chờ xử lý
+  IN_PROGRESS           // Đang thực hiện
+  WAITING_DEMO_APPROVAL // Đã nộp demo, chờ client duyệt
+  WAITING_SOURCE_CODE   // Demo được duyệt, chờ nộp source
+  WAITING_FOR_REVIEW    // Đã nộp source, chờ client nghiệm thu
+  REVISION_REQUESTED    // Client yêu cầu sửa
+  DISPUTED              // Đang tranh chấp, tiền bị giam
+  DONE                  // Hoàn thành, đã giải ngân
+  CANCELLED             // Đã hủy (mutual hoặc force)
+  EXPIRED               // Hết hạn do cron xử lý
+}
+
+enum MilestoneStatus {
+  PENDING    // Chưa bắt đầu
+  SUBMITTED  // Freelancer đã nộp
+  APPROVED   // Client đã duyệt, tiền được nhả
+  DISPUTED   // Đang tranh chấp milestone này
+}
+
+enum TransactionType {
+  DEPOSIT          // Nạp tiền vào ví
+  WITHDRAW         // Rút tiền về ngân hàng
+  ESCROW_LOCK      // Giam tiền khi chốt deal
+  ESCROW_RELEASE   // Giải ngân hoàn thành contract
+  REFUND           // Hoàn tiền client (hủy / dispute)
+  LATE_PENALTY     // Phạt trễ deadline → trả về client
+  PLATFORM_FEE     // Phí hoa hồng sàn
+  MILESTONE_RELEASE// Giải ngân theo milestone
+  BONUS            // Client thưởng thêm cho freelancer
+}
+
+enum DisputeStatus {
+  OPEN         // Vừa mở khiếu nại
+  UNDER_REVIEW // Admin đang xem xét
+  RESOLVED     // Admin/hai bên đã phân xử xong
+  CLOSED       // Đóng (sau resolved)
+}
+
+enum ExtensionStatus {
+  PENDING   // Freelancer đã gửi, chờ client
+  APPROVED  // Client đồng ý dời deadline
+  REJECTED  // Client từ chối
+}
+
+enum MutualCancelStatus {
+  REQUESTED // Một bên đã gửi yêu cầu
+  APPROVED  // Bên còn lại đồng ý → hủy ngay
+  REJECTED  // Bên còn lại từ chối
+}
+
+enum NotificationType {
+  NEW_BID
+  BID_ACCEPTED
+  BID_REJECTED
+  TIMELINE_UPDATE
+  REVISION_REQUESTED
+  DEMO_SUBMITTED
+  DEMO_APPROVED
+  DEMO_REJECTED
+  NEW_MESSAGE
+  SOURCE_CODE_SUBMITTED
+  CONTRACT_DONE
+  DISPUTE_OPENED
+  DISPUTE_RESOLVED
+  DEADLINE_WARNING
+  LATE_PENALTY_APPLIED
+  AUTO_RELEASED
+  MIA_PING
+  EXTENSION_REQUESTED
+  EXTENSION_APPROVED
+  EXTENSION_REJECTED
+  MUTUAL_CANCEL_REQUESTED
+  MUTUAL_CANCEL_APPROVED
+  MUTUAL_CANCEL_REJECTED
+  FORCE_CANCELLED
+  MILESTONE_SUBMITTED
+  MILESTONE_APPROVED
+  BONUS_RECEIVED
+  WITHDRAW_PROCESSED
+  SYSTEM_ALERT
+}
+
+enum CodeQualityRequirement {
+  FUNCTIONAL_ONLY          // Chỉ cần chạy được
+  CLEAN_CODE               // Cần cấu trúc thư mục, đặt tên rõ ràng
+  CLEAN_CODE_WITH_COMMENTS // Cần clean code + comment giải thích
+}
+
+enum PaymentGateway {
+  VNPAY
+  MOMO
+}
+
+enum FeatureLockType {
+  BID       // Khóa quyền bid
+  POST_JOB  // Khóa quyền đăng bài
+}
+
+// =============================================================
+// MODEL: User
+// Một tài khoản có thể vừa là client (đăng job) vừa là
+// freelancer (nhận job). Role chỉ phân USER vs ADMIN.
+// =============================================================
+
+model User {
+  id            String      @id @default(uuid())
+  name          String      @db.VarChar(100)
+  email         String      @unique @db.VarChar(255)
+  passwordHash  String?     @db.VarChar(255) // null nếu đăng nhập Google
+  googleId      String?     @unique @db.VarChar(100)
+  role          UserRole    @default(USER)
+  status        UserStatus  @default(ACTIVE)
+  avatarUrl     String?     @db.VarChar(500)
+  bio           String?     @db.Text
+  skills        String?     @db.Text          // JSON array string
+
+  // Quota miễn phí hàng tháng (reset cronjob ngày 1)
+  freePostQuota    Int @default(1)  // lượt đăng job miễn phí còn lại
+  freeBidQuota     Int @default(10) // lượt bid miễn phí còn lại
+
+  // Rating tổng hợp (tính từ bảng Review)
+  ratingAvg        Float @default(0)
+  ratingCount      Int   @default(0)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  wallet           Wallet?
+  refreshTokens    RefreshToken[]
+  featureLocks     FeatureLock[]
+
+  // Job relations — phân biệt vai trò qua field name
+  postedJobs       Job[]      @relation("JobClient")       // jobs user đã đăng
+  bids             Bid[]      @relation("BidFreelancer")   // bids user đã gửi
+
+  // Contract relations
+  clientContracts     Contract[] @relation("ContractClient")     // contracts với tư cách client
+  freelancerContracts Contract[] @relation("ContractFreelancer") // contracts với tư cách freelancer
+
+  // Khác
+  timelines     Timeline[]
+  messages      Message[]
+  notifications Notification[]
+  disputesOpened Dispute[]    @relation("DisputeOpener")
+  reviewsGiven  Review[]      @relation("ReviewGiver")
+  reviewsReceived Review[]    @relation("ReviewReceiver")
+  extensionRequests ExtensionRequest[]
+  mutualCancelRequests MutualCancelRequest[]
+  adminLogs     AdminLog[]
+
+  @@map("users")
+}
+
+// =============================================================
+// MODEL: RefreshToken
+// Lưu hash token, không lưu raw. Hỗ trợ multi-device.
+// =============================================================
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique @db.VarChar(255) // SHA-256 hash
+  deviceInfo String?   @db.VarChar(255)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// =============================================================
+// MODEL: FeatureLock
+// Khóa tính năng bid/đăng bài do vi phạm anti-bypass
+// =============================================================
+
+model FeatureLock {
+  id          String          @id @default(uuid())
+  userId      String
+  feature     FeatureLockType
+  reason      String          @db.VarChar(500)
+  lockedUntil DateTime
+  createdAt   DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("feature_locks")
+}
+
+// =============================================================
+// MODEL: Wallet
+// Mỗi user có đúng 1 ví.
+// available_balance: số dư khả dụng
+// locked_balance: đang bị giam trong escrow
+// =============================================================
+
+model Wallet {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  availableBalance Decimal  @default(0) @db.Decimal(18, 2)
+  lockedBalance    Decimal  @default(0) @db.Decimal(18, 2)
+  currency         String   @default("VND") @db.VarChar(10)
+  // Hold: tiền vừa nhận cần hold N ngày trước khi rút
+  holdUntil        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+}
+
+// =============================================================
+// MODEL: WalletTransaction
+// Immutable — không được xóa vật lý, là sổ cái kế toán.
+// =============================================================
+
+model WalletTransaction {
+  id             String          @id @default(uuid())
+  walletId       String
+  type           TransactionType
+  amount         Decimal         @db.Decimal(18, 2)
+  beforeBalance  Decimal         @db.Decimal(18, 2) // snapshot trước khi giao dịch
+  afterBalance   Decimal         @db.Decimal(18, 2) // snapshot sau khi giao dịch
+  referenceType  String?         @db.VarChar(50)    // "CONTRACT", "DISPUTE", "MILESTONE"...
+  referenceId    String?         @db.VarChar(36)    // FK tham chiếu linh hoạt
+  description    String          @db.VarChar(500)
+  createdAt      DateTime        @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId])
+  @@index([referenceType, referenceId])
+  @@map("wallet_transactions")
+}
+
+// =============================================================
+// MODEL: Job
+// User đăng job với tư cách client.
+// Một user có thể vừa đăng job vừa bid job người khác.
+// =============================================================
+
+model Job {
+  id                    String                 @id @default(uuid())
+  clientId              String                 // user đăng bài (vai client)
+  title                 String                 @db.VarChar(255)
+  description           String                 @db.Text
+  budget                Decimal                @db.Decimal(18, 2)
+  deadlineDays          Int                    // số ngày hoàn thành freelancer cam kết
+  status                JobStatus              @default(OPEN)
+  isBumped              Boolean                @default(false) // đã đẩy top
+  bumpedAt              DateTime?              // thời điểm đẩy top
+  freeQuotaUsed         Boolean                @default(false) // dùng quota miễn phí
+  codeQualityRequirement CodeQualityRequirement @default(FUNCTIONAL_ONLY)
+  screeningQuestion     String?                @db.VarChar(500) // câu hỏi ẩn chống bot
+  bidCount              Int                    @default(0)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  client    User       @relation("JobClient", fields: [clientId], references: [id])
+  bids      Bid[]
+  contracts Contract[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([isBumped, createdAt]) // index cho sort: bumped trước, mới nhất sau
+  @@map("jobs")
+}
+
+// =============================================================
+// MODEL: Bid
+// User đặt giá job của người khác với tư cách freelancer.
+// User không thể bid job của chính mình (validate ở service).
+// =============================================================
+
+model Bid {
+  id              String    @id @default(uuid())
+  jobId           String
+  bidderId        String                // user bid (vai freelancer)
+  bidAmount       Decimal   @db.Decimal(18, 2)
+  estimatedDays   Int
+  message         String    @db.Text
+  screeningAnswer String?   @db.Text    // trả lời câu hỏi ẩn
+  status          BidStatus @default(PENDING)
+  usedFreeQuota   Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  job       Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  bidder    User       @relation("BidFreelancer", fields: [bidderId], references: [id])
+  contracts Contract[]
+
+  @@unique([jobId, bidderId]) // mỗi user chỉ bid 1 lần cho 1 job
+  @@index([jobId])
+  @@index([bidderId])
+  @@map("bids")
+}
+
+// =============================================================
+// MODEL: Contract
+// Trung tâm hệ thống. Sinh ra khi client chấp nhận bid.
+// clientId: user đăng job; freelancerId: user nhận job.
+// Cả hai đều từ model User.
+// =============================================================
+
+model Contract {
+  id             String         @id @default(uuid())
+  jobId          String
+  clientId       String         // user vai client trong contract này
+  freelancerId   String         // user vai freelancer trong contract này
+  bidId          String         @unique
+  status         ContractStatus @default(PENDING)
+
+  // Tài chính
+  budget         Decimal        @db.Decimal(18, 2)
+  lockedAmount   Decimal        @default(0) @db.Decimal(18, 2) // tiền đang bị giam
+  penaltyAmount  Decimal        @default(0) @db.Decimal(18, 2) // tổng tiền phạt tích lũy
+  platformFeeRate Decimal       @default(0.05) @db.Decimal(5, 4) // % phí sàn
+
+  // Thời gian
+  deadlineAt     DateTime       // deadline_at = acceptedAt + estimatedDays
+  submittedAt    DateTime?      // lúc freelancer nộp final
+  reviewedAt     DateTime?      // lúc client nghiệm thu
+  completedAt    DateTime?      // lúc contract DONE
+
+  // Nội dung bàn giao
+  demoUrl        String?        @db.VarChar(500)
+  sourceCodeUrl  String?        @db.VarChar(500)
+  readmeConfirmed Boolean       @default(false) // freelancer xác nhận có README
+
+  // MIA tracking
+  lastFreelancerActivityAt DateTime? // reset mỗi lần update timeline/message
+  miaWarned                Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job        Job      @relation(fields: [jobId], references: [id])
+  client     User     @relation("ContractClient",     fields: [clientId],     references: [id])
+  freelancer User     @relation("ContractFreelancer", fields: [freelancerId],  references: [id])
+  bid        Bid      @relation(fields: [bidId], references: [id])
+
+  timelines        Timeline[]
+  milestones       Milestone[]
+  disputes         Dispute[]
+  messages         Message[]
+  reviews          Review[]
+  extensionRequest ExtensionRequest?
+  mutualCancel     MutualCancelRequest?
+
+  @@index([clientId])
+  @@index([freelancerId])
+  @@index([status])
+  @@index([deadlineAt])
+  @@index([submittedAt])
+  @@map("contracts")
+}
+
+// =============================================================
+// MODEL: Timeline
+// Log tiến độ do freelancer cập nhật.
+// Mỗi entry là immutable — không cho sửa/xóa.
+// =============================================================
+
+model Timeline {
+  id              String   @id @default(uuid())
+  contractId      String
+  createdById     String   // userId của người tạo (freelancer hoặc admin)
+  percent         Int?     // % tiến độ (chỉ dùng cho freelancer update)
+  title           String   @db.VarChar(255)
+  description     String?  @db.Text
+  action          String?  @db.VarChar(50)  // "DISPUTE_OPENED", "MILESTONE_SUBMITTED"...
+  attachmentsJson String?  @db.Text         // JSON array của URLs
+
+  createdAt DateTime @default(now())
+
+  contract  Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  createdBy User     @relation(fields: [createdById], references: [id])
+
+  @@index([contractId])
+  @@map("timelines")
+}
+
+// =============================================================
+// MODEL: Milestone
+// Thanh toán chia theo mốc cho job lớn.
+// Tổng amount của tất cả milestone = budget contract.
+// =============================================================
+
+model Milestone {
+  id          String          @id @default(uuid())
+  contractId  String
+  title       String          @db.VarChar(255)
+  amount      Decimal         @db.Decimal(18, 2)
+  dueDate     DateTime
+  status      MilestoneStatus @default(PENDING)
+  orderIndex  Int             // thứ tự milestone
+
+  // Bàn giao
+  demoUrl     String?  @db.VarChar(500)
+  note        String?  @db.Text
+  attachmentsJson String? @db.Text
+
+  submittedAt DateTime?
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@map("milestones")
+}
+
+// =============================================================
+// MODEL: ExtensionRequest
+// Freelancer xin gia hạn deadline. Mỗi contract 1 request.
+// Nếu được duyệt, cập nhật contract.deadlineAt.
+// =============================================================
+
+model ExtensionRequest {
+  id              String          @id @default(uuid())
+  contractId      String          @unique
+  requestedById   String          // user gửi yêu cầu (thường freelancer)
+  reason          String          @db.Text
+  requestedDays   Int             // số ngày muốn gia hạn thêm
+  newDeadline     DateTime        // deadline mới đề xuất
+  status          ExtensionStatus @default(PENDING)
+  respondedAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  requestedBy User     @relation(fields: [requestedById], references: [id])
+
+  @@map("extension_requests")
+}
+
+// =============================================================
+// MODEL: MutualCancelRequest
+// Một bên gửi yêu cầu hủy êm đẹp. Bên kia đồng ý → hủy.
+// =============================================================
+
+model MutualCancelRequest {
+  id            String             @id @default(uuid())
+  contractId    String             @unique
+  requestedById String
+  reason        String             @db.Text
+  status        MutualCancelStatus @default(REQUESTED)
+  respondedAt   DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  requestedBy User     @relation(fields: [requestedById], references: [id])
+
+  @@map("mutual_cancel_requests")
+}
+
+// =============================================================
+// MODEL: Dispute
+// Khiếu nại do client hoặc freelancer mở.
+// Tiền vẫn bị giam cho đến khi resolved.
+// =============================================================
+
+model Dispute {
+  id                   String        @id @default(uuid())
+  contractId           String
+  openedById           String
+  reason               String        @db.Text
+  attachmentsJson      String?       @db.Text // bằng chứng đính kèm
+  status               DisputeStatus @default(OPEN)
+
+  // Kết quả phân xử
+  clientRefundAmount       Decimal? @db.Decimal(18, 2)
+  freelancerReceiveAmount  Decimal? @db.Decimal(18, 2)
+  adminDecision            String?  @db.Text
+  resolvedById             String?  // adminId đã phán quyết
+
+  // Thương lượng partial settlement
+  settlementProposedBy     String?  // userId đề xuất
+  settlementClientAmount   Decimal? @db.Decimal(18, 2)
+  settlementFreelancerAmount Decimal? @db.Decimal(18, 2)
+
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  contract  Contract @relation(fields: [contractId], references: [id])
+  openedBy  User     @relation("DisputeOpener", fields: [openedById], references: [id])
+
+  @@index([contractId])
+  @@index([status])
+  @@map("disputes")
+}
+
+// =============================================================
+// MODEL: Message
+// Chat nội bộ theo contract. Có bộ lọc anti-bypass.
+// =============================================================
+
+model Message {
+  id              String   @id @default(uuid())
+  contractId      String
+  senderId        String
+  content         String   @db.Text
+  attachmentsJson String?  @db.Text  // JSON array URLs
+  isCensored      Boolean  @default(false)
+  censoredContent String?  @db.Text  // nội dung sau khi che
+  createdAt       DateTime @default(now())
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  sender   User     @relation(fields: [senderId], references: [id])
+
+  @@index([contractId])
+  @@index([senderId])
+  @@map("messages")
+}
+
+// =============================================================
+// MODEL: Notification
+// Thông báo trong hệ thống. Hỗ trợ unread count.
+// =============================================================
+
+model Notification {
+  id            String           @id @default(uuid())
+  userId        String
+  type          NotificationType
+  title         String           @db.VarChar(255)
+  body          String           @db.Text
+  referenceType String?          @db.VarChar(50)  // "CONTRACT", "DISPUTE"...
+  referenceId   String?          @db.VarChar(36)
+  isRead        Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// =============================================================
+// MODEL: Review
+// Đánh giá sau khi contract DONE. Mỗi contract 2 chiều:
+// client đánh giá freelancer, freelancer đánh giá client.
+// =============================================================
+
+model Review {
+  id                String   @id @default(uuid())
+  contractId        String
+  reviewerId        String   // người viết đánh giá
+  revieweeId        String   // người được đánh giá
+  codeQualityScore  Int      // 1–5 (áp dụng khi client đánh giá freelancer)
+  communicationScore Int     // 1–5
+  speedScore        Int      // 1–5
+  overallScore      Float    // tính trung bình
+  comment           String   @db.Text
+  createdAt         DateTime @default(now())
+
+  contract Contract @relation(fields: [contractId], references: [id])
+  reviewer User     @relation("ReviewGiver",    fields: [reviewerId], references: [id])
+  reviewee User     @relation("ReviewReceiver", fields: [revieweeId], references: [id])
+
+  @@unique([contractId, reviewerId]) // mỗi người chỉ review 1 lần/contract
+  @@index([revieweeId])
+  @@map("reviews")
+}
+
+// =============================================================
+// MODEL: AdminLog
+// Audit trail cho các hành động quan trọng của admin.
+// =============================================================
+
+model AdminLog {
+  id          String   @id @default(uuid())
+  adminId     String
+  action      String   @db.VarChar(100)  // "BAN_USER", "RESOLVE_DISPUTE"...
+  targetType  String   @db.VarChar(50)   // "USER", "CONTRACT", "DISPUTE"...
+  targetId    String   @db.VarChar(36)
+  detail      String?  @db.Text          // JSON hoặc mô tả chi tiết
+  createdAt   DateTime @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([targetType, targetId])
+  @@map("admin_logs")
+}
+
+// =============================================================
+// MODEL: DepositLog
+// Log nạp tiền qua cổng thanh toán.
+// Phân biệt với WalletTransaction: đây là raw webhook data.
+// =============================================================
+
+model DepositLog {
+  id                   String         @id @default(uuid())
+  userId               String
+  amount               Decimal        @db.Decimal(18, 2)
+  gateway              PaymentGateway
+  gatewayTransactionId String         @unique @db.VarChar(255)
+  gatewaySignature     String         @db.VarChar(500)
+  status               String         @db.VarChar(20)  // "SUCCESS", "FAILED", "PENDING"
+  processedAt          DateTime?
+  createdAt            DateTime       @default(now())
+
+  @@index([userId])
+  @@map("deposit_logs")
+}
