@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RegisterSchema, type RegisterInput } from "@/lib/validations/auth.schema";
 import { useRegister } from "@/lib/hooks/useAuth";
+import { useAuthStore } from "@/lib/stores/auth.store";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Mail, Lock, User } from "lucide-react";
