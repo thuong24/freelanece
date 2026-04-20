@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from "axios";
 import { useAuthStore } from "@/lib/stores/auth.store";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -63,7 +63,7 @@ api.interceptors.response.use(
         processQueue(refreshError, null);
         useAuthStore.getState().clearAuth();
         // Cố gắng gọi logout để clear httpOnly cookie
-        await api.post("/auth/logout").catch(() => {});
+        await api.post("/auth/logout").catch(() => { });
         if (typeof window !== "undefined") {
           window.location.href = "/login";
         }
