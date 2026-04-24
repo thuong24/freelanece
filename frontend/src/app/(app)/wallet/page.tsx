@@ -1,14 +1,14 @@
 "use client";
 import { useState } from "react";
 import { useAuthStore } from "@/lib/stores/auth.store";
-import { useWallet, useTransactions } from "@/lib/hooks/useWallet";
+import { useWallet, useTransactions, useDepositRequests } from "@/lib/hooks/useWallet";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { PageSpinner } from "@/components/ui/Spinner";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { formatCurrency, formatDateTime } from "@/lib/utils/format";
-import { ArrowDownLeft, ArrowUpRight, Lock, Wallet as WalletIcon, TrendingUp } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Lock, Wallet as WalletIcon, TrendingUp, QrCode } from "lucide-react";
 import type { TransactionType } from "@/lib/types/wallet.types";
 import { DepositModal } from "@/components/wallet/DepositModal";
 import { WithdrawModal } from "@/components/wallet/WithdrawModal";
@@ -28,14 +28,28 @@ const txConfig: Record<TransactionType, { label: string; color: string; icon: Re
 export default function WalletPage() {
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [initialQr, setInitialQr] = useState<{ amount: number; code: string } | null>(null);
+
   const { data: wallet, isLoading } = useWallet();
   const { data: txData, isLoading: txLoading } = useTransactions();
+  const { data: depositRequests, isLoading: reqLoading } = useDepositRequests();
+  
   const transactions = txData?.data ?? [];
 
   if (isLoading) return <PageSpinner />;
 
   const available = parseFloat(wallet?.availableBalance ?? "0");
   const locked = parseFloat(wallet?.lockedBalance ?? "0");
+
+  const openDepositWithQr = (amount: number, code: string) => {
+    setInitialQr({ amount, code });
+    setDepositOpen(true);
+  };
+
+  const handleDepositClose = () => {
+    setDepositOpen(false);
+    setTimeout(() => setInitialQr(null), 300); // clear after animation
+  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -79,6 +93,38 @@ export default function WalletPage() {
         </Button>
       </div>
 
+      {/* Pending Deposit Requests */}
+      {depositRequests && depositRequests.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold text-slate-100 mb-3">Yêu cầu nạp tiền (Chưa chuyển khoản)</h2>
+          <Card padding="none">
+            <div className="divide-y divide-slate-800">
+              {depositRequests.map((req) => (
+                <div 
+                  key={req.id} 
+                  className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-slate-800/50 transition-colors"
+                  onClick={() => openDepositWithQr(parseFloat(req.amount), req.code)}
+                >
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+                    <QrCode className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-slate-200 text-sm font-medium">Đang chờ thanh toán</p>
+                    <p className="text-slate-500 text-xs truncate">Mã: {req.code}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-bold text-sm text-amber-400">
+                      {formatCurrency(parseFloat(req.amount))}
+                    </p>
+                    <p className="text-slate-500 text-xs">{formatDateTime(req.createdAt)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Transactions */}
       <div>
         <h2 className="text-lg font-semibold text-slate-100 mb-3">Lịch sử giao dịch</h2>
@@ -117,8 +163,9 @@ export default function WalletPage() {
         )}
       </div>
       
-      <DepositModal open={depositOpen} onClose={() => setDepositOpen(false)} />
+      <DepositModal open={depositOpen} onClose={handleDepositClose} initialQrData={initialQr} />
       <WithdrawModal open={withdrawOpen} onClose={() => setWithdrawOpen(false)} availableBalance={available} />
     </div>
   );
 }
+

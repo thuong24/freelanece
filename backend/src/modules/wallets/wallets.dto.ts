@@ -55,3 +55,22 @@ export const WithdrawSchema = z.object({
 export type GetTransactionsQueryDto = z.infer<typeof GetTransactionsQuerySchema>;
 export type DepositDto = z.infer<typeof DepositSchema>;
 export type WithdrawDto = z.infer<typeof WithdrawSchema>;
+
+export const CreateDepositRequestSchema = z.object({
+  amount: z.number().positive("Số tiền nạp phải lớn hơn 0").min(10000, "Số tiền nạp tối thiểu là 10,000 VNĐ"),
+});
+export type CreateDepositRequestDto = z.infer<typeof CreateDepositRequestSchema>;
+
+export const SePayWebhookSchema = z.object({
+  id: z.number(),
+  gateway: z.string(),
+  transactionDate: z.string().nullable().optional(),
+  accountNumber: z.string().nullable().optional(),
+  code: z.string().nullable().optional(),
+  content: z.string(),
+  transferType: z.enum(["in", "out"]),
+  transferAmount: z.number(),
+  accumulated: z.number().nullable().optional(),
+  referenceCode: z.string().nullable().optional(),
+});
+export type SePayWebhookDto = z.infer<typeof SePayWebhookSchema>;

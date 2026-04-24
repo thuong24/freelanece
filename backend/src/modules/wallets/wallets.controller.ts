@@ -30,3 +30,24 @@ export const withdraw = asyncHandler(async (req: Request, res: Response) => {
   const result = await walletsService.withdraw(req.user!.id, dto);
   return successResponse(res, "Yêu cầu rút tiền đã được ghi nhận", result);
 });
+
+// POST /api/wallets/deposit/request
+export const createDepositRequest = asyncHandler(async (req: Request, res: Response) => {
+  const dto = req.body as import("./wallets.dto").CreateDepositRequestDto;
+  const result = await walletsService.createDepositRequest(req.user!.id, dto);
+  return successResponse(res, "Tạo yêu cầu nạp tiền thành công", result, 201);
+});
+
+// POST /api/wallets/deposit/sepay-webhook
+export const handleSePayWebhook = asyncHandler(async (req: Request, res: Response) => {
+  const dto = req.body as import("./wallets.dto").SePayWebhookDto;
+  const result = await walletsService.handleSePayWebhook(dto);
+  return successResponse(res, result.message, result);
+});
+
+// GET /api/wallets/deposit/requests
+export const getDepositRequests = asyncHandler(async (req: Request, res: Response) => {
+  const requests = await walletsService.getDepositRequests(req.user!.id);
+  return successResponse(res, "Lấy danh sách yêu cầu nạp tiền thành công", requests);
+});
+

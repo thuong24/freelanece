@@ -12,6 +12,13 @@ export const walletsApi = {
   deposit: (data: any) =>
     api.post<ApiResponse<any>>("/wallets/deposit", data),
 
+  createDepositRequest: (amount: number) =>
+    api.post<ApiResponse<{ id: string; code: string; amount: string; status: string }>>("/wallets/deposit/request", { amount }),
+
+  getDepositRequests: () =>
+    api.get<ApiResponse<{ id: string; code: string; amount: string; status: string; createdAt: string }[]>>("/wallets/deposit/requests"),
+
   withdraw: (data: any) =>
     api.post<ApiResponse<any>>("/wallets/withdraw", data),
 };
+

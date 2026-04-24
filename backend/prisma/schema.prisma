@@ -194,6 +194,7 @@ model User {
   reviewsReceived Review[]    @relation("ReviewReceiver")
   extensionRequests ExtensionRequest[]
   mutualCancelRequests MutualCancelRequest[]
+  depositRequests DepositRequest[]
   adminLogs     AdminLog[]
 
   @@map("users")
@@ -660,4 +661,31 @@ model DepositLog {
 
   @@index([userId])
   @@map("deposit_logs")
+}
+
+// =============================================================
+// MODEL: DepositRequest
+// Yêu cầu nạp tiền qua SePay QR
+// =============================================================
+
+enum DepositRequestStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model DepositRequest {
+  id        String   @id @default(uuid())
+  userId    String
+  amount    Decimal  @db.Decimal(18, 2)
+  code      String   @unique @db.VarChar(50) // DH + 10 số (VD: DH0388294175)
+  status    DepositRequestStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([code])
+  @@map("deposit_requests")
 }

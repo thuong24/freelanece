@@ -22,6 +22,15 @@ export const useTransactions = (filters?: object) =>
     },
   });
 
+export const useDepositRequests = () =>
+  useQuery({
+    queryKey: ["deposit-requests"],
+    queryFn: async () => {
+      const res = await walletsApi.getDepositRequests();
+      return res.data.data;
+    },
+  });
+
 export const useDeposit = () => {
   const qc = useQueryClient();
   return useMutation({
@@ -34,6 +43,18 @@ export const useDeposit = () => {
     onError: (err: any) => Alert.error(err?.response?.data?.message || "Nạp tiền thất bại"),
   });
 };
+
+export const useCreateDepositRequest = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: walletsApi.createDepositRequest,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["deposit-requests"] });
+    },
+    onError: (err: any) => Alert.error(err?.response?.data?.message || "Lỗi tạo yêu cầu nạp tiền"),
+  });
+};
+
 
 export const useWithdraw = () => {
   const qc = useQueryClient();
