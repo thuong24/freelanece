@@ -1,4 +1,5 @@
 "use client";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usersApi } from "@/lib/api/users.api";
@@ -10,10 +11,19 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { PageSpinner } from "@/components/ui/Spinner";
+import { Camera } from "lucide-react";
+
+const getFullUrl = (url: string | undefined | null) => {
+  if (!url) return undefined;
+  if (url.startsWith('http')) return url;
+  return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}${url}`;
+};
 
 export default function SettingsProfilePage() {
   const { user, setAuth } = useAuthStore();
   const qc = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: QUERY_KEYS.me,
@@ -24,15 +34,42 @@ export default function SettingsProfilePage() {
     values: {
       name: profile?.name ?? "",
       bio: profile?.bio ?? "",
-      skills: typeof profile?.skills === "string" ? JSON.parse(profile.skills || "[]").join(", ") : "",
-      avatarUrl: profile?.avatarUrl ?? "",
+      skills: Array.isArray(profile?.skills) ? profile.skills.join(", ") : "",
     },
   });
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        Alert.error("Chỉ chấp nhận file hình ảnh");
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        Alert.error("Kích thước file tối đa là 5MB");
+        return;
+      }
+      setAvatarPreview(URL.createObjectURL(file));
+    }
+  };
+
   const update = useMutation({
     mutationFn: (data: any) => {
-      const skills = data.skills ? data.skills.split(",").map((s: string) => s.trim()) : [];
-      return usersApi.updateMe({ name: data.name, bio: data.bio, avatarUrl: data.avatarUrl, skills });
+      const formData = new FormData();
+      if (data.name) formData.append("name", data.name);
+      if (data.bio) formData.append("bio", data.bio);
+      
+      const skillsArray = data.skills ? data.skills.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
+      if (skillsArray.length > 0) {
+        formData.append("skills", JSON.stringify(skillsArray));
+      }
+
+      const file = fileInputRef.current?.files?.[0];
+      if (file) {
+        formData.append("avatar", file);
+      }
+
+      return usersApi.updateMe(formData);
     },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.me });
@@ -53,7 +90,23 @@ export default function SettingsProfilePage() {
 
       <Card>
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 mb-6 text-center sm:text-left">
-          {profile && <Avatar name={profile.name} src={profile.avatarUrl} size="lg" />}
+          <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+            <Avatar 
+              name={profile?.name || "?"} 
+              src={avatarPreview || getFullUrl(profile?.avatarUrl)} 
+              size="lg" 
+            />
+            <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <Camera className="w-6 h-6 text-white" />
+            </div>
+            <input 
+              type="file" 
+              className="hidden" 
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+            />
+          </div>
           <div>
             <p className="text-slate-200 font-semibold">{profile?.name}</p>
             <p className="text-slate-400 text-sm">{profile?.email}</p>
@@ -66,7 +119,6 @@ export default function SettingsProfilePage() {
 
         <form onSubmit={handleSubmit((d) => update.mutate(d))} className="space-y-5">
           <Input label="Họ và tên" {...register("name")} />
-          <Input label="URL Ảnh đại diện" placeholder="https://..." {...register("avatarUrl")} />
           <Textarea label="Giới thiệu bản thân" rows={3} placeholder="Mô tả kỹ năng và kinh nghiệm..." {...register("bio")} />
           <Input
             label="Kỹ năng"
@@ -74,7 +126,7 @@ export default function SettingsProfilePage() {
             hint="Phân cách bằng dấu phẩy"
             {...register("skills")}
           />
-          <Button type="submit" fullWidth disabled={!isDirty} loading={update.isPending}>
+          <Button type="submit" fullWidth disabled={!isDirty && !avatarPreview} loading={update.isPending}>
             Lưu thay đổi
           </Button>
         </form>

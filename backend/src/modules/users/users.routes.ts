@@ -6,11 +6,19 @@ import * as usersController from "./users.controller";
 
 const router = Router();
 
+import { uploadAvatar } from "../../common/middlewares/upload.middleware";
+
 // GET /api/users/me — lấy profile cá nhân
 router.get("/me", requireAuth, usersController.getMe);
 
 // PATCH /api/users/me — cập nhật profile
-router.patch("/me", requireAuth, validate(UpdateProfileSchema), usersController.updateMe);
+router.patch(
+  "/me",
+  requireAuth,
+  uploadAvatar.single("avatar"),
+  validate(UpdateProfileSchema),
+  usersController.updateMe
+);
 
 // GET /api/users/:id — xem public profile
 router.get("/:id", usersController.getUserById);

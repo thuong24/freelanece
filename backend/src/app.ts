@@ -62,6 +62,10 @@ export const createApp = (): Application => {
     });
   });
 
+  // ── Static files ─────────────────────────────────────────
+  const path = require("path");
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
   // ── API Routes ───────────────────────────────────────────
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);

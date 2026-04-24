@@ -6,8 +6,11 @@ export const usersApi = {
   getMe: () =>
     api.get<ApiResponse<User>>("/users/me"),
 
-  updateMe: (data: { name?: string; bio?: string; skills?: string[]; avatarUrl?: string }) =>
-    api.patch<ApiResponse<User>>("/users/me", data),
+  updateMe: (data: FormData | { name?: string; bio?: string; skills?: string[]; avatarUrl?: string }) => {
+    return api.patch<ApiResponse<User>>("/users/me", data, {
+      headers: data instanceof FormData ? { "Content-Type": "multipart/form-data" } : undefined,
+    });
+  },
 
   getPublicProfile: (id: string) =>
     api.get<ApiResponse<PublicProfile>>(`/users/${id}`),

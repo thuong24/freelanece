@@ -14,15 +14,18 @@ export const UpdateProfileSchema = z.object({
     .trim()
     .optional(),
   skills: z
-    .array(z.string().trim().max(50))
-    .max(20, "Không được nhập quá 20 kỹ năng")
+    .any()
+    .transform((val) => {
+      if (typeof val === "string") {
+        try { return JSON.parse(val); } catch { return []; }
+      }
+      return val;
+    })
+    .pipe(
+      z.array(z.string().trim().max(50))
+        .max(20, "Không được nhập quá 20 kỹ năng")
+    )
     .optional(),
-  avatarUrl: z
-    .string()
-    .url("URL ảnh đại diện không hợp lệ")
-    .max(500)
-    .optional()
-    .nullable(),
 });
 
 // Schema query danh sách đánh giá

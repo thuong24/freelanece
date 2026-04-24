@@ -20,6 +20,20 @@ export const updateMe = async (userId: string, dto: UpdateProfileDto) => {
   const user = await usersRepo.findUserById(userId);
   if (!user) throw new NotFoundError("Không tìm thấy tài khoản");
 
+  // Nếu cập nhật avatar mới và user đã có avatar cũ là file local
+  if (dto.avatarUrl && user.avatarUrl && user.avatarUrl.startsWith("/uploads/")) {
+    const fs = require("fs");
+    const path = require("path");
+    const oldFilePath = path.join(process.cwd(), user.avatarUrl);
+    if (fs.existsSync(oldFilePath)) {
+      try {
+        fs.unlinkSync(oldFilePath);
+      } catch (err) {
+        console.error("Không thể xóa file avatar cũ:", err);
+      }
+    }
+  }
+
   const updated = await usersRepo.updateUserProfile(userId, dto);
 
   return {

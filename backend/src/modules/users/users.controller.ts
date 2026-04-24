@@ -13,6 +13,12 @@ export const getMe = asyncHandler(async (req: Request, res: Response) => {
 // PATCH /api/users/me
 export const updateMe = asyncHandler(async (req: Request, res: Response) => {
   const dto = req.body as UpdateProfileDto;
+  
+  if (req.file) {
+    // Generate the URL for the frontend to access
+    dto.avatarUrl = `/uploads/avatars/${req.file.filename}`;
+  }
+
   const user = await usersService.updateMe(req.user!.id, dto);
   return successResponse(res, "Cập nhật thông tin thành công", user);
 });

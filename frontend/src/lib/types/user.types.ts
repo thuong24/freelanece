@@ -9,7 +9,7 @@ export interface User {
   status: UserStatus;
   avatarUrl: string | null;
   bio: string | null;
-  skills: string | null; // JSON array string
+  skills: string[];
   ratingAvg: number;
   ratingCount: number;
   freePostQuota: number;
